@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if command -v gitleaks >/dev/null 2>&1; then
+  exec gitleaks git --pre-commit --staged --redact --no-banner .
+elif [ -x .tools/gitleaks/bin/gitleaks.exe ]; then
+  exec .tools/gitleaks/bin/gitleaks.exe git --pre-commit --staged --redact --no-banner .
+fi
+echo 'Gitleaks is required before committing. Install it from the official gitleaks release.' >&2
+exit 1

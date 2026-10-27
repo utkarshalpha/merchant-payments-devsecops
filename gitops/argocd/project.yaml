@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: merchant-payments
+  namespace: argocd
+spec:
+  sourceRepos: [https://github.com/utkarshalpha/merchant-payments-devsecops.git]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: merchant-payments-staging}
+    - {server: https://kubernetes.default.svc, namespace: merchant-payments-production}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: Service}
+    - {group: "", kind: ServiceAccount}
+    - {group: apps, kind: Deployment}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: networking.k8s.io, kind: NetworkPolicy}

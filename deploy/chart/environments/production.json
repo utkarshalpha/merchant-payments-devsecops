@@ -1,0 +1,9 @@
+{
+  "replicaCount": 2,
+  "runtimeSecret": "merchant-payments-production-runtime",
+  "image": {
+    "repository": "registry.invalid/replace-me/merchant-payments",
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "sourceCommit": "0000000000000000000000000000000000000000"
+  }
+}

@@ -1,0 +1,10 @@
+target/
+.tools/
+.m2/
+.data/
+.env
+*.pem
+*.key
+*.log
+__pycache__/
+reports/

@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: merchant-payments-production
+  namespace: argocd
+spec:
+  project: merchant-payments
+  source:
+    repoURL: https://github.com/utkarshalpha/merchant-payments-devsecops.git
+    targetRevision: main
+    path: deploy/chart
+    helm:
+      releaseName: merchant-payments
+      valueFiles: [environments/production.json]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: merchant-payments-production
+  # Merge approved production values, then perform an authorized manual sync.
+  syncPolicy:
+    syncOptions: [PruneLast=true]

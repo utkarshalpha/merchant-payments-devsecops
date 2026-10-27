@@ -1,0 +1,98 @@
+// Connection/build milestone. The full DevSecOps pipeline is maintained separately.
+// Only the owner's trusted main branch runs on this small learning controller.
+pipeline {
+    agent any
+    tools { jdk 'java21'; maven 'maven3' }
+    environment { MAVEN_OPTS = '-Xmx256m' }
+    // Check main every minute; build only when Git has new commits.
+    // Outbound SSH polling keeps this SSM-only lab private. EC2 must be running.
+    triggers { pollSCM('* * * * *') }
+    options {
+        skipDefaultCheckout(true)
+        timeout(time: 20, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10', artifactNumToKeepStr: '3'))
+        timestamps()
+    }
+    stages {
+        stage('Checkout trusted repository') {
+            steps { deleteDir(); checkout scm }
+        }
+        stage('Secrets gate - Gitleaks') {
+            steps { sh 'gitleaks git --redact --no-banner .' }
+        }
+        stage('Java build and payment tests') {
+            steps { sh 'mvn --batch-mode --no-transfer-progress -DargLine=-Xmx384m clean verify' }
+        }
+        stage('SAST - Semgrep') {
+            options { timeout(time: 5, unit: 'MINUTES') }
+            steps { sh 'sh .ci/sast.sh' }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'reports/semgrep.*', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('SCA - OWASP Dependency-Check') {
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps { sh 'sh .ci/sca.sh' }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'reports/sca/**', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('GitOps promotion policy tests') {
+            steps { sh 'python3 -m unittest discover -s tests_gitops -v' }
+        }
+        stage('Docker build, Trivy and container health') {
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps { sh 'bash .ci/container-lab.sh' }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'reports/container-*.json,reports/sbom.cdx.json', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('IaC - Checkov') {
+            options { timeout(time: 5, unit: 'MINUTES') }
+            steps { sh 'sh .ci/iac.sh' }
+            post { always { archiveArtifacts artifacts: 'reports/iac/**', allowEmptyArchive: true } }
+        }
+        stage('Cosign - sign and verify image archive') {
+            options { timeout(time: 3, unit: 'MINUTES') }
+            steps { sh 'bash .ci/sign.sh' }
+            post {
+                always { archiveArtifacts artifacts: 'reports/signing/**', allowEmptyArchive: true }
+            }
+        }
+        stage('ECR publish and Cosign registry verification') {
+            options { timeout(time: 5, unit: 'MINUTES') }
+            steps { sh 'bash .ci/registry.sh' }
+            post { always { archiveArtifacts artifacts: 'reports/registry/**', allowEmptyArchive: true } }
+        }
+        stage('Deploy verified image to staging') {
+            options { timeout(time: 6, unit: 'MINUTES') }
+            steps { sh 'bash .ci/staging.sh deploy' }
+            post { always { archiveArtifacts artifacts: 'reports/staging/**', allowEmptyArchive: true } }
+        }
+        stage('Staging payment smoke tests') {
+            steps { sh 'bash .ci/staging.sh smoke' }
+            post { always { archiveArtifacts artifacts: 'reports/staging/**', allowEmptyArchive: true } }
+        }
+        stage('DAST - ZAP authenticated passive scan') {
+            options { timeout(time: 8, unit: 'MINUTES') }
+            steps { sh 'bash .ci/staging.sh dast' }
+            post { always { archiveArtifacts artifacts: 'reports/dast/**', allowEmptyArchive: true } }
+        }
+        stage('Archive application') {
+            steps { archiveArtifacts artifacts: 'target/merchant-payments.jar', fingerprint: true }
+        }
+    }
+    post {
+        always {
+            junit allowEmptyResults: true, testResults: 'target/surefire-reports/TEST-*.xml'
+            sh 'rm -f reports/image.tar'
+        }
+    }
+}

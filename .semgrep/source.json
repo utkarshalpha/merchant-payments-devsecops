@@ -1,0 +1,9 @@
+{
+  "retrieved": "2026-10-28",
+  "policy": "All findings block. Scan errors and unscanned application Java files block. Paid rules are not included.",
+  "edition": "Community Edition",
+  "engine": "1.182.1",
+  "source": "https://semgrep.dev/c/p/java",
+  "rule_count": 60,
+  "sha256": "cd18a28d7efe2b9d4d1eb08d67455b8d50ddee645aa7b5263065d0a9c3c5054c"
+}

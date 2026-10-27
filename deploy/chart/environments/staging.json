@@ -1,0 +1,14 @@
+{
+  "replicaCount": 1,
+  "runtimeSecret": "merchant-payments-staging-runtime",
+  "image": {
+    "repository": "registry.invalid/replace-me/merchant-payments",
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "sourceCommit": "0000000000000000000000000000000000000000"
+  },
+  "imagePullSecrets": [
+    {
+      "name": "ecr-pull"
+    }
+  ]
+}

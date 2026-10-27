@@ -1,0 +1,14 @@
+# Apply separately using platform access, before namespace-scoped Argo applications.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: merchant-payments-staging
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: merchant-payments-production
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

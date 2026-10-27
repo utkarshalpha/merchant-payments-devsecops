@@ -1,0 +1,95 @@
+# Lab-only PostgreSQL: data stays on this EC2's existing EBS disk.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: staging-postgres
+  namespace: merchant-payments-staging
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: {storage: 1Gi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  namespace: merchant-payments-staging
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app.kubernetes.io/name: postgresql}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: postgresql}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgresql
+          image: postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
+          env:
+            - {name: POSTGRES_DB, value: payments}
+            - {name: POSTGRES_USER, value: payments}
+            - {name: POSTGRES_PASSWORD_FILE, value: /run/secrets/db/password}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          ports: [{containerPort: 5432}]
+          readinessProbe:
+            exec: {command: [pg_isready, -U, payments, -d, payments]}
+          livenessProbe:
+            exec: {command: [pg_isready, -U, payments, -d, payments]}
+            initialDelaySeconds: 30
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: runtime, mountPath: /var/run/postgresql}
+            - {name: temp, mountPath: /tmp}
+            - {name: password, mountPath: /run/secrets/db, readOnly: true}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: staging-postgres}
+        - name: runtime
+          emptyDir: {}
+        - name: temp
+          emptyDir: {}
+        - name: password
+          secret:
+            secretName: merchant-payments-staging-runtime
+            defaultMode: 0440
+            items: [{key: password, path: password}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+  namespace: merchant-payments-staging
+spec:
+  selector: {app.kubernetes.io/name: postgresql}
+  ports: [{port: 5432, targetPort: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql
+  namespace: merchant-payments-staging
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: postgresql}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: merchant-payments}
+      ports: [{protocol: TCP, port: 5432}]
+  egress: []
